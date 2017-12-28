@@ -1,1 +1,2 @@
-*.json
+*.kml
+node_modules/*

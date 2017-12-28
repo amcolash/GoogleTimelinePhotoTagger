@@ -1,0 +1,24 @@
+{
+  "name": "googletimelinephototagger",
+  "version": "1.0.0",
+  "description": "Parse google timeline kml files and tag photo geolocations from the info",
+  "main": "timeline.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amcolash/GoogleTimelinePhotoTagger.git"
+  },
+  "author": "Andrew McOlash",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/amcolash/GoogleTimelinePhotoTagger/issues"
+  },
+  "homepage": "https://github.com/amcolash/GoogleTimelinePhotoTagger#readme",
+  "dependencies": {
+    "@mapbox/togeojson": "^0.16.0",
+    "lerp": "^1.0.3",
+    "moment": "^2.20.1"
+  }
+}

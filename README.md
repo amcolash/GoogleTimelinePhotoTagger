@@ -1,2 +1,2 @@
 # GoogleTimelinePhotoTagger
-Parse google timeline takeout json files and tag photo geolocations from the info
+Parse google timeline kml files and tag photo geolocations from the info
