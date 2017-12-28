@@ -19,6 +19,7 @@
   "dependencies": {
     "@mapbox/togeojson": "^0.16.0",
     "lerp": "^1.0.3",
-    "moment": "^2.20.1"
+    "moment": "^2.20.1",
+    "node-exiftool": "^2.3.0"
   }
 }
