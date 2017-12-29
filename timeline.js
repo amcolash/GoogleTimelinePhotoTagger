@@ -36,27 +36,49 @@ function loadKml(location_path, image_path) {
   var kml = new DOMParser().parseFromString(fs.readFileSync(location_path, 'utf8'));
   converted = tj.kml(kml);
 
+  console.log("starting to get all image metadata");
+
   ep.open()
     .then(() => ep.readMetadata(image_path, ['-File:all']))
     .then((res) => {
-      console.log(res);
+      // console.log(res);
+      
+      if (res.data) {
+        console.log("got all metadata");
 
-      for (var i = 0; i < res.data.length; i++) {
-        var time = getTime(res.data[i]);
-        var coords = getCoordinates(time);
+        var index = -1;
 
-        if (coords) {
-          console.log(coords);
-          ep.writeMetadata(res.data[i].SourceFile, {
-            GPSLongitudeRef: 'W',
-            GPSLongitude: coords.lng,
-            GPSLatitudeRef: 'N',
-            GPSLatitude: coords.lat
-          }, ['overwrite_original']);
+        res.data = res.data.sort(function(a, b) {
+          return a.SourceFile.localeCompare(b.SourceFile);
+        });
+
+        function next() {
+          index++;
+          
+          if (index < res.data.length) {
+            var time = getTime(res.data[index]);
+            var coords = getCoordinates(time);
+            
+            if (coords) {
+              console.log("writing: " + res.data[index].SourceFile + ", " + JSON.stringify(coords));
+              ep.writeMetadata(res.data[index].SourceFile, {
+                GPSLongitudeRef: 'W',
+                GPSLongitude: coords.lng,
+                GPSLatitudeRef: 'N',
+                GPSLatitude: coords.lat
+              }, ['overwrite_original']).then(function(res) {
+                next();
+              });
+            }
+          } else {
+            console.log("closing up");
+            ep.close();
+          }
         }
+
+        next();
       }
     })
-    .then(() => ep.close())
 }
 
 function getTime(data) {
@@ -77,7 +99,7 @@ function getTime(data) {
     }
 
     // Doing the search in UTC to match to timeline format
-    console.log("Search time: " + time.toString());
+    // console.log("Search time: " + time.toString());
 
     return time;
   }
@@ -126,9 +148,7 @@ function getCoordinates(searchTime) {
             var lng = lerp(geo.coordinates[index][0], geo.coordinates[index + 1][0], fraction);
           }
 
-          console.log(lat + ", " + lng);
-
-          return { lat: lat, lng: lng };
+          return { lat: lat, lng: lng, name: feature.properties.name };
         }
       }
     }
