@@ -24,7 +24,7 @@ function checkArgs() {
   }
 
   if (args.length < 3 || !args[1].endsWith(".kml")) {
-    console.error("usage: timeline.js [locations.kml] [image file]");
+    console.error("usage: timeline.js [location_history.kml] [images_path]");
     process.exit(1);
   }
 
@@ -32,27 +32,28 @@ function checkArgs() {
   loadKml(args[1], args[2]);
 }
 
-function loadKml(path, image) {
-  var kml = new DOMParser().parseFromString(fs.readFileSync(path, 'utf8'));
+function loadKml(location_path, image_path) {
+  var kml = new DOMParser().parseFromString(fs.readFileSync(location_path, 'utf8'));
   converted = tj.kml(kml);
 
-  var coords;
-
   ep.open()
-    .then(() => ep.readMetadata(image, ['-File:all']))
+    .then(() => ep.readMetadata(image_path, ['-File:all']))
     .then((res) => {
-      var time = getTime(res.data[0]);
-      coords = getCoordinates(time);
-    })
-    .then(() => {
-      if (coords) {
-        console.log(coords);
-        ep.writeMetadata(image, {
-          GPSLongitudeRef: 'W',
-          GPSLongitude: coords.lng,
-          GPSLatitudeRef: 'N',
-          GPSLatitude: coords.lat
-        });
+      console.log(res);
+
+      for (var i = 0; i < res.data.length; i++) {
+        var time = getTime(res.data[i]);
+        var coords = getCoordinates(time);
+
+        if (coords) {
+          console.log(coords);
+          ep.writeMetadata(res.data[i].SourceFile, {
+            GPSLongitudeRef: 'W',
+            GPSLongitude: coords.lng,
+            GPSLatitudeRef: 'N',
+            GPSLatitude: coords.lat
+          }, ['overwrite_original']);
+        }
       }
     })
     .then(() => ep.close())
