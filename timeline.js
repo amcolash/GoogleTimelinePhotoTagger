@@ -8,9 +8,15 @@ const DOMParser = require('xmldom').DOMParser;
 const exiftool = require('node-exiftool');
 const ep = new exiftool.ExiftoolProcess();
 
-var converted; // gets defined after kml is loaded
+/**
+ * This script will geo tag photos based on a google timeline kml file. I made this for my canon t5i,
+ * so it should work for other canons at least. Send a pull request or make an issue if things are not
+ * working for your photos. Check the README for more info.
+ */
 
-// Kick things off
+var converted; // global converted kml data, gets defined after it is loaded
+
+// Kick things off and check arg usage
 checkArgs();
 
 function checkArgs() {
@@ -47,6 +53,7 @@ function loadKml(location_path, image_path) {
         console.log("got all metadata");
 
         var index = -1;
+        var points = [];
 
         res.data = res.data.sort(function(a, b) {
           return a.SourceFile.localeCompare(b.SourceFile);
@@ -56,22 +63,28 @@ function loadKml(location_path, image_path) {
           index++;
           
           if (index < res.data.length) {
-            var time = getTime(res.data[index]);
+            var data = res.data[index];
+            var time = getTime(data);
             var coords = getCoordinates(time);
             
             if (coords) {
-              console.log("writing: " + res.data[index].SourceFile + ", " + JSON.stringify(coords));
-              ep.writeMetadata(res.data[index].SourceFile, {
-                GPSLongitudeRef: 'W',
-                GPSLongitude: coords.lng,
-                GPSLatitudeRef: 'N',
-                GPSLatitude: coords.lat
-              }, ['overwrite_original']).then(function(res) {
+              points.push(coords);
+
+              data.GPSLongitudeRef =  'W';
+              data.GPSLongitude = coords.lng;
+              data.GPSLatitudeRef = 'N';
+              data.GPSLatitude = coords.lat;
+              
+              console.log("writing: " + data.SourceFile + ", " + JSON.stringify(coords) + " @ " + time.toString());
+              ep.writeMetadata(data.SourceFile, data, ['overwrite_original']).then(function(res) {
                 next();
               });
+            } else {
+              next();
             }
           } else {
             console.log("closing up");
+            console.log(JSON.stringify(points));
             ep.close();
           }
         }
@@ -102,10 +115,16 @@ function getTime(data) {
     // console.log("Search time: " + time.toString());
 
     return time;
+  } else {
+    console.error("Missing timestamp for " + data.SourceFile + ". Data: " + JSON.stringify(data));
   }
 }
 
 function getCoordinates(searchTime) {
+  if (typeof searchTime === 'undefined') {
+    console.error("Undefined search time! Unable to get coordinates.");
+    return;
+  }
 
   for (var i = 0; i < converted.features.length; i++) {
     var feature = converted.features[i];
@@ -113,14 +132,7 @@ function getCoordinates(searchTime) {
     var end = moment.utc(feature.properties.timespan.end);
     
     
-    if (!searchTime || searchTime.isBetween(start, end) || searchTime.isSame(start) || searchTime.isSame(end)) {
-      if (!searchTime) {
-        console.log("--------------------------------");
-        console.log(feature.properties.name);
-        console.log(start.toString());
-        console.log(end.toString());
-      }
-
+    if (searchTime.isBetween(start, end) || searchTime.isSame(start) || searchTime.isSame(end)) {
       // console.log("Found start time: " + start.toString());
       // console.log("Found end time: " + end.toString());
 
