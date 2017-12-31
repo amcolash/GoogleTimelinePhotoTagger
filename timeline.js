@@ -22,6 +22,7 @@ checkArgs();
 function checkArgs() {
   var args = [];
 
+  // Parse out the node path from the args (if supplied)
   for (var i = 0; i < process.argv.length; i++) {
     var arg = process.argv[i];
     if (!arg.includes("/node")) {
@@ -29,6 +30,7 @@ function checkArgs() {
     }
   }
 
+  // If something went wrong with the usage
   if (args.length < 3 || !args[1].endsWith(".kml")) {
     console.error("usage: timeline.js [location_history.kml] [images_path]");
     process.exit(1);
@@ -39,42 +41,50 @@ function checkArgs() {
 }
 
 function loadKml(location_path, image_path) {
+  // Load our passed in location file
   var kml = new DOMParser().parseFromString(fs.readFileSync(location_path, 'utf8'));
   converted = tj.kml(kml);
 
   console.log("starting to get all image metadata");
 
+  // Open up exiftool and wait for it to start
   ep.open()
+    // Get metadata for all readable files in the given directory
     .then(() => ep.readMetadata(image_path, ['-File:all']))
+    // After we have gotten the data, then start to tag each file returned
     .then((res) => {
       // console.log(res);
       
+      // If we got something back...
       if (res.data) {
         console.log("got all metadata");
 
         var index = -1;
-        var points = [];
 
+        // Sort file list by file name
         res.data = res.data.sort(function(a, b) {
           return a.SourceFile.localeCompare(b.SourceFile);
         });
 
+        // Yikes, callback fun
         function next() {
           index++;
           
           if (index < res.data.length) {
+            // Handle next photo
             var data = res.data[index];
             var time = getTime(data);
             var coords = getCoordinates(time);
             
+            // If we parsed the time correcrly and got coordinates
             if (coords) {
-              points.push(coords);
-
+              // Modify existing data
               data.GPSLongitudeRef =  'W';
               data.GPSLongitude = coords.lng;
               data.GPSLatitudeRef = 'N';
               data.GPSLatitude = coords.lat;
               
+              // Write new exif data
               console.log("writing: " + data.SourceFile + ", " + JSON.stringify(coords) + " @ " + time.toString());
               ep.writeMetadata(data.SourceFile, data, ['overwrite_original']).then(function(res) {
                 next();
@@ -83,9 +93,10 @@ function loadKml(location_path, image_path) {
               next();
             }
           } else {
-            console.log("closing up");
-            console.log(JSON.stringify(points));
+            // All done
+            console.log("Closing Up");
             ep.close();
+            console.log("Happy tagging!");
           }
         }
 
@@ -96,17 +107,21 @@ function loadKml(location_path, image_path) {
 
 function getTime(data) {
   var dataTime = data.DateTimeOriginal || data.CreateDate || data.ModifyDate;
+
+  // If we have a date/time from the exif data
   if (dataTime) {
     // Assuming format 'YYYY:MM:DD hh:mm:ss'
     var parts = dataTime.split(" ");
     parts[0] = parts[0].replace(/:/g, "-");
     var time = moment.utc(parts[0] + "T" + parts[1] + "Z");
     
+    // If the exif data has a timezone, add it to find the UTC time
     if (data.TimeZone) {
       // Assuming format '+-hh:mm'
       var splitZone = data.TimeZone.split(":");
       var sign = Math.sign(splitZone[0]);
 
+      // Add the offset to the found time
       time = time.add(Math.abs(splitZone[0]), 'h');
       time = time.add(splitZone[1], 'm');
     }
@@ -127,21 +142,21 @@ function getCoordinates(searchTime) {
   }
 
   for (var i = 0; i < converted.features.length; i++) {
+    // Loop through each feature in the kml and get some data from it
     var feature = converted.features[i];
     var start = moment.utc(feature.properties.timespan.begin);
     var end = moment.utc(feature.properties.timespan.end);
     
-    
+    // Assuming there is only one segment per time range (which should be a valid assumption except when starting to move)
     if (searchTime.isBetween(start, end) || searchTime.isSame(start) || searchTime.isSame(end)) {
-      // console.log("Found start time: " + start.toString());
-      // console.log("Found end time: " + end.toString());
+      // console.log("Found matching segment - start time: " + start.toString());
+      // console.log("Found matching segment - end time: " + end.toString());
 
       for (var j = 0; j < feature.geometry.geometries.length; j++) {
         var geo = feature.geometry.geometries[j];
+
+        // Assuming google always give a line string for each section of the timeline data
         if (geo.type === "LineString") {
-          var totalDuration = end.diff(start);
-          var partialDuration = searchTime.diff(start);
-          var percent = partialDuration / totalDuration;
 
           if (geo.coordinates.length === 1) {
             // Simple case
@@ -149,6 +164,10 @@ function getCoordinates(searchTime) {
             var lng = geo.coordinates[0][0];
           } else {
             // If we have more than one point, we are assuming that we are moving at a constant velocity
+            // Figure out where we are on the path
+            var totalDuration = end.diff(start);
+            var partialDuration = searchTime.diff(start);
+            var percent = partialDuration / totalDuration;
 
             // Find which coordinates to lerp between
             var index = percent * (geo.coordinates.length - 1);
@@ -160,7 +179,12 @@ function getCoordinates(searchTime) {
             var lng = lerp(geo.coordinates[index][0], geo.coordinates[index + 1][0], fraction);
           }
 
-          return { lat: lat, lng: lng, name: feature.properties.name };
+          // Return our coordinates
+          return {
+            lat: lat,
+            lng: lng,
+            name: feature.properties.name
+          };
         }
       }
     }
