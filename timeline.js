@@ -176,7 +176,7 @@ function getCoordinates(searchTime) {
       //console.log(JSON.stringify(feature))
 
 
-      if (feature.geometry.type === "Point") {
+      if (feature.geometry.type === "Point" || !feature.geometry.geometries) {
         var geo = feature.geometry;
         return {
           lat: geo.coordinates[0],
